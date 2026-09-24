@@ -19,6 +19,15 @@ const GOOGLE_SCRIPT_URL =
 // Fields that use "Tulis Jawaban Anda" (radio value === "__other__")
 const OTHER_FIELDS = ["q1_2", "q2_1", "q3_2"];
 
+// Helper utility to convert local file streams into base64 text packages
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = (error) => reject(error);
+  });
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("surveyForm");
   const statusEl = document.getElementById("formStatus");
@@ -45,6 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Asynchronous Form Submission handling text and base64 files
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearErrors();
@@ -57,48 +67,76 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const data = collectData();
-
-    // If no Google Script URL configured, fall back to downloadable JSON
-    if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.trim() === "") {
-      downloadAsJson(data);
-      statusEl.textContent =
-        "URL Google Apps Script belum dikonfigurasi. Jawaban diunduh sebagai file JSON. Lihat petunjuk di script.js.";
-      statusEl.classList.add("success");
-      return;
-    }
-
     submitBtn.disabled = true;
     document.querySelector(".btn-text").classList.add("hidden");
     document.querySelector(".btn-loading").classList.remove("hidden");
 
     try {
-      // Apps Script expects form-urlencoded or JSON; we send as form data for simplicity
+      // 1. Gather baseline text form fields
+      const data = {
+        timestamp: new Date().toISOString(),
+        respondentName: form.respondentName.value.trim(),
+        q1_1: form.q1_1.value.trim(),
+        q1_2: getRadioValue("q1_2"),
+        q1_2_note: form.q1_2_note.value.trim(),
+        q2_1: getRadioValue("q2_1"),
+        q2_2: form.q2_2.value.trim(),
+        q3_1: form.q3_1.value.trim(),
+        q3_2: getRadioValue("q3_2"),
+      };
+
+      // 2. Scan file elements and convert selections into base64 payload strings
+      const fileFields = [
+        "file_1_1",
+        "file_1_2",
+        "file_2_1",
+        "file_2_2",
+        "file_3_1",
+        "file_3_2",
+      ];
+      for (const id of fileFields) {
+        const input = document.getElementById(id);
+        if (input && input.files && input.files[0]) {
+          const file = input.files[0];
+          data[id] = await toBase64(file);
+          data[`${id}_name`] = file.name;
+          data[`${id}_type`] = file.type;
+        }
+      }
+
+      // If no Google Script URL configured, fall back to downloadable JSON payload
+      if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.trim() === "") {
+        downloadAsJson(data);
+        statusEl.textContent =
+          "URL Google Apps Script belum dikonfigurasi. Jawaban diunduh sebagai file JSON.";
+        statusEl.classList.add("success");
+        return;
+      }
+
+      // 3. Dispatch data object across standard application URL parameters
       const formBody = new URLSearchParams();
       Object.entries(data).forEach(([k, v]) => formBody.append(k, v));
 
       const res = await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
-        mode: "no-cors", // Apps Script web apps often need no-cors; response will be opaque
+        mode: "no-cors",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formBody.toString(),
       });
 
-      // With no-cors we can't read the response; assume success if no network error
-      statusEl.textContent =
-        "Jawaban berhasil dikirim. Terima kasih! (File lampiran tidak terkirim otomatis — kirim manual jika perlu.)";
+      statusEl.textContent = "Jawaban & File berhasil dikirim. Terima kasih!";
       statusEl.classList.add("success");
       form.reset();
-      // Hide any open "other" inputs after reset
+
+      // Hide any open custom text fields after resetting
       OTHER_FIELDS.forEach((name) => {
         document.getElementById(`other_${name}`)?.classList.add("hidden");
       });
     } catch (err) {
       console.error(err);
       statusEl.textContent =
-        "Gagal mengirim. Periksa koneksi atau konfigurasi URL Apps Script. Jawaban juga bisa diunduh sebagai JSON.";
+        "Gagal mengirim. Periksa koneksi atau konfigurasi URL Apps Script.";
       statusEl.classList.add("error");
-      downloadAsJson(data); // safety net
     } finally {
       submitBtn.disabled = false;
       document.querySelector(".btn-text").classList.remove("hidden");
@@ -111,7 +149,7 @@ function validateForm() {
   let valid = true;
   const form = document.getElementById("surveyForm");
 
-  // Required text / textarea
+  // Required text / textarea elements
   const requiredText = ["respondentName", "q1_1", "q2_2", "q3_1"];
   requiredText.forEach((id) => {
     const el = document.getElementById(id);
@@ -122,7 +160,7 @@ function validateForm() {
     }
   });
 
-  // Radio groups + optional other
+  // Radio selection evaluation rules
   OTHER_FIELDS.forEach((name) => {
     const selected = form.querySelector(`input[name="${name}"]:checked`);
     if (!selected) {
@@ -146,7 +184,6 @@ function showError(nameOrId, message) {
   const msgEl = document.querySelector(`.error-msg[data-for="${nameOrId}"]`);
   if (msgEl) msgEl.textContent = message;
 
-  // Highlight the field container
   const field =
     document.getElementById(nameOrId)?.closest(".field") ||
     document.querySelector(`input[name="${nameOrId}"]`)?.closest(".field");
@@ -160,43 +197,6 @@ function clearErrors() {
   document
     .querySelectorAll(".field.has-error")
     .forEach((el) => el.classList.remove("has-error"));
-}
-
-function collectData() {
-  const form = document.getElementById("surveyForm");
-  const data = {
-    timestamp: new Date().toISOString(),
-    respondentName: form.respondentName.value.trim(),
-    q1_1: form.q1_1.value.trim(),
-    q1_2: getRadioValue("q1_2"),
-    q1_2_note: form.q1_2_note.value.trim(),
-    q2_1: getRadioValue("q2_1"),
-    q2_2: form.q2_2.value.trim(),
-    q3_1: form.q3_1.value.trim(),
-    q3_2: getRadioValue("q3_2"),
-  };
-
-  // Note about files (files are not uploaded automatically)
-  const fileNotes = [];
-  [
-    "file_1_1",
-    "file_1_2",
-    "file_2_1",
-    "file_2_2",
-    "file_3_1",
-    "file_3_2",
-  ].forEach((id) => {
-    const input = document.getElementById(id);
-    if (input?.files?.length) {
-      const names = Array.from(input.files)
-        .map((f) => f.name)
-        .join(", ");
-      fileNotes.push(`${id}: ${names}`);
-    }
-  });
-  if (fileNotes.length) data.fileAttachmentsNote = fileNotes.join(" | ");
-
-  return data;
 }
 
 function getRadioValue(name) {
@@ -223,43 +223,3 @@ function downloadAsJson(data) {
   a.remove();
   URL.revokeObjectURL(url);
 }
-
-/*
- * ===== Google Apps Script (paste into script.google.com) =====
- *
- * function doPost(e) {
- *   try {
- *     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
- *     // Optional: create header row if empty
- *     if (sheet.getLastRow() === 0) {
- *       sheet.appendRow([
- *         "Timestamp", "Nama", "1.1 Lokasi Sistem", "1.2 Ketersediaan HW",
- *         "1.2 Catatan", "2.1 Akses Admin", "2.2 Konfigurasi",
- *         "3.1 Penanggung traffic@", "3.2 Volume Email", "File Note"
- *       ]);
- *     }
- *     var p = e.parameter;
- *     sheet.appendRow([
- *       p.timestamp || new Date().toISOString(),
- *       p.respondentName || "",
- *       p.q1_1 || "",
- *       p.q1_2 || "",
- *       p.q1_2_note || "",
- *       p.q2_1 || "",
- *       p.q2_2 || "",
- *       p.q3_1 || "",
- *       p.q3_2 || "",
- *       p.fileAttachmentsNote || ""
- *     ]);
- *     return ContentService
- *       .createTextOutput(JSON.stringify({ status: "ok" }))
- *       .setMimeType(ContentService.MimeType.JSON);
- *   } catch (err) {
- *     return ContentService
- *       .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
- *       .setMimeType(ContentService.MimeType.JSON);
- *   }
- * }
- *
- * Deploy as Web App → Execute as Me → Anyone → copy URL into GOOGLE_SCRIPT_URL
- */

@@ -1,243 +1,435 @@
-<!DOCTYPE html>
+<!-- @format -->
+
+<!doctype html>
 <html lang="id">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Survei Teknis Sistem Email</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-</head>
-<body>
-  <div class="bg-blobs">
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
-    <div class="blob blob-3"></div>
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Survei Teknis Sistem Email</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
 
-  <div class="container">
-    <header class="glass header">
-      <h1>Survei Teknis Sistem Email</h1>
-      <p class="subtitle">Pertanyaan untuk kepentingan teknis — mohon isi dengan lengkap dan akurat.</p>
-    </header>
-
-    <form id="surveyForm" class="survey-form" novalidate>
-      <!-- Name field -->
-      <section class="glass card">
-        <h2 class="section-title">Identitas Responden</h2>
-        <div class="field">
-          <label for="respondentName">Nama <span class="required">*</span></label>
-          <input type="text" id="respondentName" name="respondentName" placeholder="Masukkan nama lengkap Anda" required autocomplete="name" />
-          <span class="error-msg" data-for="respondentName"></span>
-        </div>
-      </section>
-
-      <!-- 1. Hosting & Operasional Sistem -->
-      <section class="glass card">
-        <h2 class="section-title">1. Hosting &amp; Operasional Sistem 🌐</h2>
-
-        <!-- 1.1 -->
-        <div class="question-block">
-          <h3>1.1 Lokasi Sistem</h3>
-          <p class="question-text">
-            Pertanyaan: Di mana sistem email kita saat ini di-hosting? (Misalnya: server fisik di kantor/on-premise, atau di-hosting secara online melalui VPS/cPanel/Google Workspace/Microsoft 365?)
-          </p>
-          <div class="field">
-            <label for="q1_1">Jawaban Ringkas <span class="required">*</span></label>
-            <textarea id="q1_1" name="q1_1" rows="3" placeholder="Isikan jawaban di sini" required></textarea>
-            <span class="error-msg" data-for="q1_1"></span>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: bukti tagihan hosting, screenshot panel server, atau dokumentasi tempat server fisik.</p>
-            <input type="file" id="file_1_1" name="file_1_1" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-
-        <!-- 1.2 -->
-        <div class="question-block">
-          <h3>1.2 Ketersediaan Perangkat Keras</h3>
-          <p class="question-text">
-            Pertanyaan: Apakah komputer atau perangkat keras yang mendukung/menjalankan sistem email pernah dimatikan di luar jam kerja (misal: malam hari, akhir pekan, atau saat libur)?
-          </p>
-          <div class="field">
-            <label>Pilihan Jawaban <span class="required">*</span></label>
-            <div class="radio-group" role="radiogroup" aria-labelledby="q1_2_label">
-              <label class="radio-label">
-                <input type="radio" name="q1_2" value="Tidak pernah (Aktif 24/7)" required />
-                <span>Tidak pernah (Aktif 24/7)</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q1_2" value="Pernah / Rutin dimatikan" />
-                <span>Pernah / Rutin dimatikan</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q1_2" value="__other__" />
-                <span>Tulis Jawaban Anda</span>
-              </label>
-            </div>
-            <div class="other-input hidden" id="other_q1_2">
-              <input type="text" name="q1_2_other" placeholder="Tulis jawaban Anda di sini" />
-            </div>
-            <span class="error-msg" data-for="q1_2"></span>
-          </div>
-          <div class="field">
-            <label for="q1_2_note">Catatan Tambahan</label>
-            <textarea id="q1_2_note" name="q1_2_note" rows="2" placeholder="Isikan penjelasan jika ada"></textarea>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: screenshot jadwal pemeliharaan, foto server/PC hosting, atau log uptime jika ada.</p>
-            <input type="file" id="file_1_2" name="file_1_2" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-      </section>
-
-      <!-- 2. Akses Administratif & Teknis -->
-      <section class="glass card">
-        <h2 class="section-title">2. Akses Administratif &amp; Teknis 🔑</h2>
-
-        <!-- 2.1 -->
-        <div class="question-block">
-          <h3>2.1 Pengelolaan Administratif</h3>
-          <p class="question-text">
-            Pertanyaan: Jika platform email di-hosting melalui penyedia online eksternal (seperti cPanel, Webmail, atau Admin Console), apakah kita memiliki kredensial akses administratif resminya?
-          </p>
-          <div class="field">
-            <label>Pilihan Jawaban <span class="required">*</span></label>
-            <div class="radio-group">
-              <label class="radio-label">
-                <input type="radio" name="q2_1" value="Ya, memiliki akses penuh" required />
-                <span>Ya, memiliki akses penuh</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q2_1" value="Akses dipegang oleh pihak ketiga/vendor" />
-                <span>Akses dipegang oleh pihak ketiga/vendor</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q2_1" value="Tidak tahu / Belum ada" />
-                <span>Tidak tahu / Belum ada</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q2_1" value="__other__" />
-                <span>Tulis Jawaban Anda</span>
-              </label>
-            </div>
-            <div class="other-input hidden" id="other_q2_1">
-              <input type="text" name="q2_1_other" placeholder="Tulis jawaban Anda di sini" />
-            </div>
-            <span class="error-msg" data-for="q2_1"></span>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: screenshot halaman login dashboard admin atau dokumen serah terima akses.</p>
-            <input type="file" id="file_2_1" name="file_2_1" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-
-        <!-- 2.2 -->
-        <div class="question-block">
-          <h3>2.2 Gambaran Umum Konfigurasi</h3>
-          <p class="question-text">
-            Pertanyaan: Tampilkan gambaran singkat mengenai konfigurasi kontrol administratif utama, khususnya yang memuat akun email aktif, aturan penerusan (email forwarding), dan perutean domain (MX Records/DNS).
-          </p>
-          <div class="field">
-            <label for="q2_2">Jawaban Ringkas <span class="required">*</span></label>
-            <textarea id="q2_2" name="q2_2" rows="4" placeholder="Catatan penjelasan ringkas" required></textarea>
-            <span class="error-msg" data-for="q2_2"></span>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: tangkapan layar/screenshot daftar email aktif, halaman Email Forwarding, atau Zona DNS.</p>
-            <input type="file" id="file_2_2" name="file_2_2" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-      </section>
-
-      <!-- 3. Tata Kelola & Volume Kotak Surat -->
-      <section class="glass card">
-        <h2 class="section-title">3. Tata Kelola &amp; Volume Kotak Surat (Mailbox) 📊</h2>
-
-        <!-- 3.1 -->
-        <div class="question-block">
-          <h3>3.1 Pengelolaan Akun traffic@</h3>
-          <p class="question-text">
-            Pertanyaan: Siapa (nama/jabatan/tim) yang saat ini bertanggung jawab memegang dan mengelola kredensial untuk kotak surat (mailbox) traffic@?
-          </p>
-          <div class="field">
-            <label for="q3_1">Jawaban Ringkas <span class="required">*</span></label>
-            <input type="text" id="q3_1" name="q3_1" placeholder="Nama &amp; Jabatan Penanggung Jawab" required />
-            <span class="error-msg" data-for="q3_1"></span>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: screenshot daftar pengguna/akses mailbox atau dokumen SOP penugasan.</p>
-            <input type="file" id="file_3_1" name="file_3_1" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-
-        <!-- 3.2 -->
-        <div class="question-block">
-          <h3>3.2 Volume Alur Kerja Harian</h3>
-          <p class="question-text">
-            Pertanyaan: Kira-kira berapa banyak email operasional penting atau dokumen pengiriman (seperti Bill of Lading, Manifest, dll.) yang diterima melalui kotak surat ini pada hari kerja biasa?
-          </p>
-          <div class="field">
-            <label>Pilihan Estimasi <span class="required">*</span></label>
-            <div class="radio-group">
-              <label class="radio-label">
-                <input type="radio" name="q3_2" value="&lt; 20 email / hari" required />
-                <span>&lt; 20 email / hari</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q3_2" value="20 – 50 email / hari" />
-                <span>20 – 50 email / hari</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q3_2" value="50 – 100 email / hari" />
-                <span>50 – 100 email / hari</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q3_2" value="&gt; 100 email / hari" />
-                <span>&gt; 100 email / hari</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="q3_2" value="__other__" />
-                <span>Tulis Jawaban Anda</span>
-              </label>
-            </div>
-            <div class="other-input hidden" id="other_q3_2">
-              <input type="text" name="q3_2_other" placeholder="Tulis estimasi atau jawaban Anda di sini" />
-            </div>
-            <span class="error-msg" data-for="q3_2"></span>
-          </div>
-          <div class="field file-field">
-            <label>Lampiran File (opsional)</label>
-            <p class="hint">📁 Upload File: screenshot tampilan inbox harian atau sampel file Bill of Lading/dokumen pengiriman.</p>
-            <input type="file" id="file_3_2" name="file_3_2" multiple accept="image/*,.pdf,.doc,.docx" />
-          </div>
-        </div>
-      </section>
-
-      <!-- Submit -->
-      <div class="glass card submit-card">
-        <p class="submit-note">
-          Semua field bertanda <span class="required">*</span> wajib diisi. File lampiran bersifat opsional dan dapat dikirim terpisah jika diperlukan.
+    <div class="container">
+      <header class="glass header">
+        <h1>Survei Teknis Sistem Email</h1>
+        <p class="subtitle">
+          Pertanyaan untuk kepentingan teknis — mohon isi dengan lengkap dan
+          akurat.
         </p>
-        <button type="submit" id="submitBtn" class="btn-submit">
-          <span class="btn-text">Kirim Jawaban</span>
-          <span class="btn-loading hidden">Mengirim...</span>
-        </button>
-        <div id="formStatus" class="form-status" role="status" aria-live="polite"></div>
-      </div>
-    </form>
+      </header>
 
-    <footer class="glass footer">
-      <p>Data disimpan ke Google Drive (via Google Sheets / Apps Script). Pastikan URL endpoint sudah dikonfigurasi di <code>script.js</code>.</p>
-    </footer>
-  </div>
+      <form id="surveyForm" class="survey-form" novalidate>
+        <!-- Name field -->
+        <section class="glass card">
+          <h2 class="section-title">Identitas Responden</h2>
+          <div class="field">
+            <label for="respondentName"
+              >Nama <span class="required">*</span></label
+            >
+            <input
+              type="text"
+              id="respondentName"
+              name="respondentName"
+              placeholder="Masukkan nama lengkap Anda"
+              required
+              autocomplete="name"
+            />
+            <span class="error-msg" data-for="respondentName"></span>
+          </div>
+        </section>
 
-  <script src="script.js"></script>
-</body>
+        <!-- 1. Hosting & Operasional Sistem -->
+        <section class="glass card">
+          <h2 class="section-title">1. Hosting &amp; Operasional Sistem 🌐</h2>
+
+          <!-- 1.1 -->
+          <div class="question-block">
+            <h3>1.1 Lokasi Sistem</h3>
+            <p class="question-text">
+              Pertanyaan: Di mana sistem email kita saat ini di-hosting?
+              (Misalnya: server fisik di kantor/on-premise, atau di-hosting
+              secara online melalui VPS/cPanel/Google Workspace/Microsoft 365?)
+            </p>
+            <div class="field">
+              <label for="q1_1"
+                >Jawaban Ringkas <span class="required">*</span></label
+              >
+              <textarea
+                id="q1_1"
+                name="q1_1"
+                rows="3"
+                placeholder="Isikan jawaban di sini"
+                required
+              ></textarea>
+              <span class="error-msg" data-for="q1_1"></span>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: bukti tagihan hosting, screenshot panel server,
+                atau dokumentasi tempat server fisik.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,application/pdf"
+              />
+            </div>
+          </div>
+
+          <!-- 1.2 -->
+          <div class="question-block">
+            <h3>1.2 Ketersediaan Perangkat Keras</h3>
+            <p class="question-text">
+              Pertanyaan: Apakah komputer atau perangkat keras yang
+              mendukung/menjalankan sistem email pernah dimatikan di luar jam
+              kerja (misal: malam hari, akhir pekan, atau saat libur)?
+            </p>
+            <div class="field">
+              <label>Pilihan Jawaban <span class="required">*</span></label>
+              <div
+                class="radio-group"
+                role="radiogroup"
+                aria-labelledby="q1_2_label"
+              >
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q1_2"
+                    value="Tidak pernah (Aktif 24/7)"
+                    required
+                  />
+                  <span>Tidak pernah (Aktif 24/7)</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q1_2"
+                    value="Pernah / Rutin dimatikan"
+                  />
+                  <span>Pernah / Rutin dimatikan</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="q1_2" value="__other__" />
+                  <span>Tulis Jawaban Anda</span>
+                </label>
+              </div>
+              <div class="other-input hidden" id="other_q1_2">
+                <input
+                  type="text"
+                  name="q1_2_other"
+                  placeholder="Tulis jawaban Anda di sini"
+                />
+              </div>
+              <span class="error-msg" data-for="q1_2"></span>
+            </div>
+            <div class="field">
+              <label for="q1_2_note">Catatan Tambahan</label>
+              <textarea
+                id="q1_2_note"
+                name="q1_2_note"
+                rows="2"
+                placeholder="Isikan penjelasan jika ada"
+              ></textarea>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: screenshot jadwal pemeliharaan, foto server/PC
+                hosting, atau log uptime jika ada.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,application/pdf"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Akses Administratif & Teknis -->
+        <section class="glass card">
+          <h2 class="section-title">2. Akses Administratif &amp; Teknis 🔑</h2>
+
+          <!-- 2.1 -->
+          <div class="question-block">
+            <h3>2.1 Pengelolaan Administratif</h3>
+            <p class="question-text">
+              Pertanyaan: Jika platform email di-hosting melalui penyedia online
+              eksternal (seperti cPanel, Webmail, atau Admin Console), apakah
+              kita memiliki kredensial akses administratif resminya?
+            </p>
+            <div class="field">
+              <label>Pilihan Jawaban <span class="required">*</span></label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q2_1"
+                    value="Ya, memiliki akses penuh"
+                    required
+                  />
+                  <span>Ya, memiliki akses penuh</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q2_1"
+                    value="Akses dipegang oleh pihak ketiga/vendor"
+                  />
+                  <span>Akses dipegang oleh pihak ketiga/vendor</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q2_1"
+                    value="Tidak tahu / Belum ada"
+                  />
+                  <span>Tidak tahu / Belum ada</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="q2_1" value="__other__" />
+                  <span>Tulis Jawaban Anda</span>
+                </label>
+              </div>
+              <div class="other-input hidden" id="other_q2_1">
+                <input
+                  type="text"
+                  name="q2_1_other"
+                  placeholder="Tulis jawaban Anda di sini"
+                />
+              </div>
+              <span class="error-msg" data-for="q2_1"></span>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: screenshot halaman login dashboard admin atau
+                dokumen serah terima akses.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,application/pdf"
+              />
+            </div>
+          </div>
+
+          <!-- 2.2 -->
+          <div class="question-block">
+            <h3>2.2 Gambaran Umum Konfigurasi</h3>
+            <p class="question-text">
+              Pertanyaan: Tampilkan gambaran singkat mengenai konfigurasi
+              kontrol administratif utama, khususnya yang memuat akun email
+              aktif, aturan penerusan (email forwarding), dan perutean domain
+              (MX Records/DNS).
+            </p>
+            <div class="field">
+              <label for="q2_2"
+                >Jawaban Ringkas <span class="required">*</span></label
+              >
+              <textarea
+                id="q2_2"
+                name="q2_2"
+                rows="4"
+                placeholder="Catatan penjelasan ringkas"
+                required
+              ></textarea>
+              <span class="error-msg" data-for="q2_2"></span>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: tangkapan layar/screenshot daftar email aktif,
+                halaman Email Forwarding, atau Zona DNS.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,application/pdf"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Tata Kelola & Volume Kotak Surat -->
+        <section class="glass card">
+          <h2 class="section-title">
+            3. Tata Kelola &amp; Volume Kotak Surat (Mailbox) 📊
+          </h2>
+
+          <!-- 3.1 -->
+          <div class="question-block">
+            <h3>3.1 Pengelolaan Akun traffic@</h3>
+            <p class="question-text">
+              Pertanyaan: Siapa (nama/jabatan/tim) yang saat ini bertanggung
+              jawab memegang dan mengelola kredensial untuk kotak surat
+              (mailbox) traffic@?
+            </p>
+            <div class="field">
+              <label for="q3_1"
+                >Jawaban Ringkas <span class="required">*</span></label
+              >
+              <input
+                type="text"
+                id="q3_1"
+                name="q3_1"
+                placeholder="Nama &amp; Jabatan Penanggung Jawab"
+                required
+              />
+              <span class="error-msg" data-for="q3_1"></span>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: screenshot daftar pengguna/akses mailbox atau
+                dokumen SOP penugasan.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,application/pdf"
+              />
+            </div>
+          </div>
+
+          <!-- 3.2 -->
+          <div class="question-block">
+            <h3>3.2 Volume Alur Kerja Harian</h3>
+            <p class="question-text">
+              Pertanyaan: Kira-kira berapa banyak email operasional penting atau
+              dokumen pengiriman (seperti Bill of Lading, Manifest, dll.) yang
+              diterima melalui kotak surat ini pada hari kerja biasa?
+            </p>
+            <div class="field">
+              <label>Pilihan Estimasi <span class="required">*</span></label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q3_2"
+                    value="&lt; 20 email / hari"
+                    required
+                  />
+                  <span>&lt; 20 email / hari</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q3_2"
+                    value="20 – 50 email / hari"
+                  />
+                  <span>20 – 50 email / hari</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q3_2"
+                    value="50 – 100 email / hari"
+                  />
+                  <span>50 – 100 email / hari</span>
+                </label>
+                <label class="radio-label">
+                  <input
+                    type="radio"
+                    name="q3_2"
+                    value="&gt; 100 email / hari"
+                  />
+                  <span>&gt; 100 email / hari</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="q3_2" value="__other__" />
+                  <span>Tulis Jawaban Anda</span>
+                </label>
+              </div>
+              <div class="other-input hidden" id="other_q3_2">
+                <input
+                  type="text"
+                  name="q3_2_other"
+                  placeholder="Tulis estimasi atau jawaban Anda di sini"
+                />
+              </div>
+              <span class="error-msg" data-for="q3_2"></span>
+            </div>
+            <div class="field file-field">
+              <label>Lampiran File (opsional)</label>
+              <p class="hint">
+                📁 Upload File: screenshot tampilan inbox harian atau sampel
+                file Bill of Lading/dokumen pengiriman.
+              </p>
+              <div class="hint">
+                Pilih file atau ambil gambar menggunakan kamera HP Anda
+              </div>
+              <input
+                type="file"
+                id="file_1_1"
+                name="file_1_1"
+                accept="image/*,.pdf,.doc,.docx"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Submit -->
+        <div class="glass card submit-card">
+          <p class="submit-note">
+            Semua field bertanda <span class="required">*</span> wajib diisi.
+            File lampiran bersifat opsional dan dapat dikirim terpisah jika
+            diperlukan.
+          </p>
+          <button type="submit" id="submitBtn" class="btn-submit">
+            <span class="btn-text">Kirim Jawaban</span>
+            <span class="btn-loading hidden">Mengirim...</span>
+          </button>
+          <div
+            id="formStatus"
+            class="form-status"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </div>
+      </form>
+
+      <!-- <footer class="glass footer">
+        <p>
+          Data disimpan ke Google Drive (via Google Sheets / Apps Script).
+          Pastikan URL endpoint sudah dikonfigurasi di <code>script.js</code>.
+        </p>
+      </footer> -->
+    </div>
+
+    <script src="script.js"></script>
+  </body>
 </html>
