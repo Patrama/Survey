@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       // 2. Scan file elements and convert selections into base64 payload strings
+      // Ensure this loop inside script.js processes [0] to get the file instance
       const fileFields = [
         "file_1_1",
         "file_1_2",
@@ -97,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
       for (const id of fileFields) {
         const input = document.getElementById(id);
         if (input && input.files && input.files[0]) {
-          const file = input.files[0];
+          const file = input.files[0]; // ← Make sure it specifies index [0]
           data[id] = await toBase64(file);
           data[`${id}_name`] = file.name;
           data[`${id}_type`] = file.type;
