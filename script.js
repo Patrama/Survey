@@ -7,6 +7,8 @@ const CONFIG = {
   SCRIPT_URL:
     "https://script.google.com/macros/s/AKfycbwC-fV_uUUAXZ0gL7DWpw4alg8zBPzFKtwVmJOWae2rcXrRTEBSeXbATAGuRvUBxCT86g/exec",
   MAX_FILE_BYTES: 3 * 1024 * 1024,
+  MAX_RETRIES: 2, // total attempts = 1 original + MAX_RETRIES
+  RETRY_DELAY_MS: 2500,
   OTHER_FIELDS: ["q1_2", "q2_1", "q3_2"],
   REQUIRED_TEXT_FIELDS: ["respondentName", "q1_1", "q2_2", "q3_1"],
   FILE_FIELDS: [
@@ -19,12 +21,18 @@ const CONFIG = {
   ],
 };
 
+// ==========================================
+// INITIALISATION
+// ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("surveyForm");
   initDynamicOtherFields(form, CONFIG.OTHER_FIELDS);
   initFormSubmit(form);
 });
 
+// ==========================================
+// DYNAMIC "OTHER" RADIO HANDLING
+// ==========================================
 function initDynamicOtherFields(form, fields) {
   fields.forEach((fieldName) => {
     const radios = form.querySelectorAll(`input[name="${fieldName}"]`);
@@ -49,6 +57,9 @@ function initDynamicOtherFields(form, fields) {
   });
 }
 
+// ==========================================
+// FORM SUBMIT + RETRY LOGIC
+// ==========================================
 function initFormSubmit(form) {
   const statusEl = document.getElementById("formStatus");
   const submitBtn = document.getElementById("submitBtn");
@@ -82,14 +93,13 @@ function initFormSubmit(form) {
       updateStatus(statusEl, "Memproses data dan lampiran...", "info");
       const payload = await buildFormPayload(form);
 
-      updateStatus(statusEl, "Mengirim jawaban ke server...", "info");
-      const resData = await sendPayload(CONFIG.SCRIPT_URL, payload);
+      const resData = await sendWithRetry(payload, statusEl);
 
       if (resData.status === "error") {
         throw new Error(resData.message || "Gagal menyimpan data.");
       }
 
-      const successMsg = `Jawaban berhasil disimpan! <a href="${resData.folderUrl}" target="_blank" style="color: inherit; text-decoration: underline;">Buka Folder Google Drive</a>`;
+      const successMsg = `Jawaban berhasil disimpan! <a href="${resData.folderUrl}" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline;">Buka Folder Google Drive</a>`;
       updateStatus(statusEl, successMsg, "success");
       form.reset();
       resetOtherFields(CONFIG.OTHER_FIELDS);
@@ -106,6 +116,63 @@ function initFormSubmit(form) {
   });
 }
 
+/**
+ * Sends the payload. On "Server busy" responses, waits and retries
+ * up to CONFIG.MAX_RETRIES times.
+ */
+async function sendWithRetry(payload, statusEl) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      updateStatus(
+        statusEl,
+        `Server sibuk. Mencoba lagi (${attempt}/${CONFIG.MAX_RETRIES})...`,
+        "info",
+      );
+      await delay(CONFIG.RETRY_DELAY_MS);
+    } else {
+      updateStatus(statusEl, "Mengirim jawaban ke server...", "info");
+    }
+
+    try {
+      const resData = await sendPayload(CONFIG.SCRIPT_URL, payload);
+
+      // Retry only on explicit busy signal
+      if (
+        resData.status === "error" &&
+        isBusyMessage(resData.message) &&
+        attempt < CONFIG.MAX_RETRIES
+      ) {
+        lastError = new Error(resData.message);
+        continue;
+      }
+
+      return resData;
+    } catch (networkErr) {
+      // Network / parse failures: retry as well
+      lastError = networkErr;
+      if (attempt < CONFIG.MAX_RETRIES) continue;
+      throw networkErr;
+    }
+  }
+
+  throw lastError || new Error("Server busy. Please try again in a moment.");
+}
+
+function isBusyMessage(message) {
+  if (!message || typeof message !== "string") return false;
+  const lower = message.toLowerCase();
+  return lower.includes("server busy") || lower.includes("sibuk");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ==========================================
+// PAYLOAD BUILDER
+// ==========================================
 async function buildFormPayload(form) {
   const data = {
     timestamp: new Date().toISOString(),
@@ -122,7 +189,7 @@ async function buildFormPayload(form) {
   await Promise.all(
     CONFIG.FILE_FIELDS.map(async (fieldId) => {
       const input = document.getElementById(fieldId);
-      if (input && input.files && input.files[0]) {
+      if (input?.files?.[0]) {
         const file = input.files[0];
         data[fieldId] = await toBase64(file);
         data[`${fieldId}_name`] = file.name;
@@ -151,11 +218,20 @@ async function sendPayload(url, payload) {
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify(payload),
   });
-  return await response.json();
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  return response.json();
 }
 
+// ==========================================
+// VALIDATION
+// ==========================================
 function validateForm(form) {
   let valid = true;
+
   CONFIG.REQUIRED_TEXT_FIELDS.forEach((id) => {
     const el = document.getElementById(id);
     if (!el || !(el.value || "").trim()) {
@@ -186,7 +262,7 @@ function validateForm(form) {
 function validateFileSizes(fields, maxBytes) {
   for (const id of fields) {
     const input = document.getElementById(id);
-    if (input && input.files && input.files[0]) {
+    if (input?.files?.[0]) {
       const file = input.files[0];
       if (file.size > maxBytes) {
         return `File "${file.name}" terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 3 MB.`;
@@ -206,9 +282,13 @@ function getRadioValue(form, name) {
   return selected.value;
 }
 
+// ==========================================
+// UI HELPERS
+// ==========================================
 function showError(nameOrId, message) {
   const msgEl = document.querySelector(`.error-msg[data-for="${nameOrId}"]`);
   if (msgEl) msgEl.textContent = message;
+
   const field =
     document.getElementById(nameOrId)?.closest(".field") ||
     document.querySelector(`input[name="${nameOrId}"]`)?.closest(".field");
@@ -232,8 +312,8 @@ function resetOtherFields(fields) {
 
 function setLoadingState(buttonEl, isLoading) {
   buttonEl.disabled = isLoading;
-  document.querySelector(".btn-text").classList.toggle("hidden", isLoading);
-  document.querySelector(".btn-loading").classList.toggle("hidden", !isLoading);
+  document.querySelector(".btn-text")?.classList.toggle("hidden", isLoading);
+  document.querySelector(".btn-loading")?.classList.toggle("hidden", !isLoading);
 }
 
 function updateStatus(el, message, type = "info") {

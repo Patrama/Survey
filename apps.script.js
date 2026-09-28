@@ -1,7 +1,7 @@
 /** @format */
 
 // ==========================================
-// CONFIGURATION & MODULAR CONSTANTS (NO HARDCODING)
+// CONFIGURATION (single source of truth)
 // ==========================================
 const CONFIG = {
   SPREADSHEET_ID: "1_8OVN1eZSVctG2IL3y5hhEQfPiBtr3Kw5vLI9nqWUiI",
@@ -9,7 +9,7 @@ const CONFIG = {
   SHEET_NAME: "Survey",
   DEFAULT_RESPONDENT: "Anonymous",
   DEFAULT_MIME_TYPE: "application/octet-stream",
-  LOCK_TIMEOUT_MS: 30000, // Increased to 30 seconds for heavy concurrency buffering
+  LOCK_TIMEOUT_MS: 20000, // Short critical section; 20s is ample
 };
 
 const HEADERS = [
@@ -39,103 +39,62 @@ const FILE_FIELDS = [
 // MAIN ENTRY POINT
 // ==========================================
 function doPost(e) {
-  const lock = LockService.getScriptLock();
-
   try {
-    // 1. Acquire Concurrency Lock
-    if (!lock.waitLock(CONFIG.LOCK_TIMEOUT_MS)) {
-      return createJsonResponse(
-        "error",
-        "Server busy. Please try again in a moment.",
-      );
-    }
-
     const payload = parsePayload(e);
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = getOrCreateSheet(spreadsheet, CONFIG.SHEET_NAME);
 
-    // Ensure headers exist dynamically
-    ensureHeaders(sheet, HEADERS);
-
-    // 2. Prepare Data and Write to Sheet Safely (Critical Section)
+    // --- Phase 1: Work that does NOT need the lock ---
     const respondentName = sanitizeInput(
       payload.respondentName || CONFIG.DEFAULT_RESPONDENT,
     );
     const timestampStr = payload.timestamp || new Date().toISOString();
 
-    // Create Folder & Process Files (Isolated inside try-catch to manage locks cleanly)
-    let folderUrl = "";
-    let fileNotes = "No files uploaded";
-
-    try {
-      const folderData = createRespondentFolder(respondentName);
-      folderUrl = folderData.url;
-      fileNotes = processFileUploads(payload, folderData.folder);
-    } catch (fileErr) {
-      fileNotes = "File processing failed: " + fileErr.message;
-    }
+    const folderData = createRespondentFolder(respondentName, timestampStr);
+    const fileNote = processFileUploads(payload, folderData.folder);
 
     const rowData = buildRowData(
       payload,
       timestampStr,
       respondentName,
-      fileNotes,
-      folderUrl,
+      fileNote,
+      folderData.url,
     );
 
-    // Write row to sheet
-    sheet.appendRow(rowData);
+    // --- Phase 2: Narrow critical section (sheet only) ---
+    appendRowWithLock(rowData);
+
+    return createJsonResponse("success", "Data saved successfully", {
+      folderId: folderData.id,
+      folderUrl: folderData.url,
+    });
   } catch (err) {
-    return createJsonResponse("error", err.toString());
+    return createJsonResponse("error", err.message || err.toString());
+  }
+}
+
+// ==========================================
+// LOCKED SHEET WRITE (minimal critical section)
+// ==========================================
+function appendRowWithLock(rowData) {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.waitLock(CONFIG.LOCK_TIMEOUT_MS)) {
+    throw new Error("Server busy. Please try again in a moment.");
+  }
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = getOrCreateSheet(spreadsheet, CONFIG.SHEET_NAME);
+    ensureHeaders(sheet, HEADERS);
+    sheet.appendRow(rowData);
   } finally {
-    // 3. Release Lock Immediately After Critical Section
     lock.releaseLock();
   }
-
-  return createJsonResponse("success", "Data saved successfully", {
-    folderUrl: folderUrl,
-  });
 }
 
 // ==========================================
-// HELPER & UTILITY MODULES
+// FILE & FOLDER HELPERS (no lock)
 // ==========================================
-
-function parsePayload(e) {
-  if (e && e.postData && e.postData.contents) {
-    return JSON.parse(e.postData.contents);
-  } else if (e && e.parameter) {
-    return e.parameter;
-  }
-  return {};
-}
-
-function sanitizeInput(value) {
-  if (typeof value !== "string") return value || "";
-  const trimmed = value.trim();
-  // Prevent Formula Injection in Google Sheets
-  if (/^[=+=\-@]/.test(trimmed)) {
-    return "'" + trimmed;
-  }
-  return trimmed;
-}
-
-function getOrCreateSheet(spreadsheet, sheetName) {
-  let sheet = spreadsheet.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(sheetName);
-  }
-  return sheet;
-}
-
-function ensureHeaders(sheet, headers) {
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
-  }
-}
-
-function createRespondentFolder(respondentName) {
+function createRespondentFolder(respondentName, timestampStr) {
   let parentFolder;
   try {
     parentFolder = DriveApp.getFolderById(CONFIG.PARENT_FOLDER_ID);
@@ -144,14 +103,20 @@ function createRespondentFolder(respondentName) {
   }
 
   const dateStr = Utilities.formatDate(
-    new Date(),
+    new Date(timestampStr),
     Session.getScriptTimeZone(),
     "yyyy-MM-dd HH:mm",
   );
+
   const folder = parentFolder.createFolder(
     `Survey - ${respondentName} (${dateStr})`,
   );
-  return { folder: folder, url: folder.getUrl() };
+
+  return {
+    id: folder.getId(),
+    url: folder.getUrl(),
+    folder: folder,
+  };
 }
 
 function processFileUploads(payload, targetFolder) {
@@ -180,6 +145,9 @@ function processFileUploads(payload, targetFolder) {
   return notes.length > 0 ? notes.join(", ") : "No files uploaded";
 }
 
+// ==========================================
+// DATA BUILDERS
+// ==========================================
 function buildRowData(p, timestamp, respondentName, fileNote, folderUrl) {
   return [
     timestamp,
@@ -196,12 +164,41 @@ function buildRowData(p, timestamp, respondentName, fileNote, folderUrl) {
   ];
 }
 
-function createJsonResponse(status, message, extraData = {}) {
-  const responseObj = Object.assign(
-    { status: status, message: message },
-    extraData,
+// ==========================================
+// UTILITIES
+// ==========================================
+function parsePayload(e) {
+  if (e && e.postData && e.postData.contents) {
+    return JSON.parse(e.postData.contents);
+  }
+  if (e && e.parameter) {
+    return e.parameter;
+  }
+  return {};
+}
+
+function sanitizeInput(value) {
+  if (typeof value !== "string") return value || "";
+  const trimmed = value.trim();
+  // Prevent formula injection in Sheets
+  return /^[=+\-@]/.test(trimmed) ? "'" + trimmed : trimmed;
+}
+
+function getOrCreateSheet(spreadsheet, sheetName) {
+  return (
+    spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName)
   );
+}
+
+function ensureHeaders(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  }
+}
+
+function createJsonResponse(status, message, extraData = {}) {
   return ContentService.createTextOutput(
-    JSON.stringify(responseObj),
+    JSON.stringify(Object.assign({ status, message }, extraData)),
   ).setMimeType(ContentService.MimeType.JSON);
 }
