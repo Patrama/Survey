@@ -313,7 +313,9 @@ function resetOtherFields(fields) {
 function setLoadingState(buttonEl, isLoading) {
   buttonEl.disabled = isLoading;
   document.querySelector(".btn-text")?.classList.toggle("hidden", isLoading);
-  document.querySelector(".btn-loading")?.classList.toggle("hidden", !isLoading);
+  document
+    .querySelector(".btn-loading")
+    ?.classList.toggle("hidden", !isLoading);
 }
 
 function updateStatus(el, message, type = "info") {

@@ -94,12 +94,21 @@ function appendRowWithLock(rowData) {
 // ==========================================
 // FILE & FOLDER HELPERS (no lock)
 // ==========================================
+/**
+ * Creates a sub-folder under the configured parent.
+ * Fails fast if the parent folder is inaccessible — no root-folder fallback
+ * (root requires broader scopes and is rarely the desired location).
+ */
 function createRespondentFolder(respondentName, timestampStr) {
   let parentFolder;
   try {
     parentFolder = DriveApp.getFolderById(CONFIG.PARENT_FOLDER_ID);
   } catch (err) {
-    parentFolder = DriveApp.getRootFolder();
+    throw new Error(
+      "Tidak dapat mengakses folder induk (PARENT_FOLDER_ID). " +
+        "Pastikan ID benar dan skrip memiliki izin Drive. Detail: " +
+        (err.message || err),
+    );
   }
 
   const dateStr = Utilities.formatDate(
