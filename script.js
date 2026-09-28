@@ -5,7 +5,7 @@
 
 const CONFIG = {
   SCRIPT_URL:
-    "https://script.google.com/macros/s/AKfycbwC-fV_uUUAXZ0gL7DWpw4alg8zBPzFKtwVmJOWae2rcXrRTEBSeXbATAGuRvUBxCT86g/exec",
+    "https://script.google.com/macros/s/AKfycby2-ccdRweEIt6K-fHIxth-ZZ915Xw4TJE2OscOotwwWmcBUGlP1WE5jpaI6B21Xuessw/exec",
   MAX_FILE_BYTES: 3 * 1024 * 1024,
   MAX_RETRIES: 2, // total attempts = 1 original + MAX_RETRIES
   RETRY_DELAY_MS: 2500,
