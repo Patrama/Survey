@@ -1,123 +1,207 @@
 /** @format */
 
+// ==========================================
+// CONFIGURATION & MODULAR CONSTANTS (NO HARDCODING)
+// ==========================================
+const CONFIG = {
+  SPREADSHEET_ID: "1_8OVN1eZSVctG2IL3y5hhEQfPiBtr3Kw5vLI9nqWUiI",
+  PARENT_FOLDER_ID: "1Lwbvmf_dkms7FAhqZaXUReSBULkhRbcG",
+  SHEET_NAME: "Survey",
+  DEFAULT_RESPONDENT: "Anonymous",
+  DEFAULT_MIME_TYPE: "application/octet-stream",
+  LOCK_TIMEOUT_MS: 30000, // Increased to 30 seconds for heavy concurrency buffering
+};
+
+const HEADERS = [
+  "Timestamp",
+  "Nama",
+  "1.1 Lokasi Sistem",
+  "1.2 Ketersediaan HW",
+  "1.2 Catatan",
+  "2.1 Akses Admin",
+  "2.2 Konfigurasi",
+  "3.1 Penanggung traffic@",
+  "3.2 Volume Email",
+  "File Note",
+  "Folder Link",
+];
+
+const FILE_FIELDS = [
+  "file_1_1",
+  "file_1_2",
+  "file_2_1",
+  "file_2_2",
+  "file_3_1",
+  "file_3_2",
+];
+
+// ==========================================
+// MAIN ENTRY POINT
+// ==========================================
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+
   try {
-    // Parse JSON payload or fallback to parameter
-    var p = {};
-    if (e && e.postData && e.postData.contents) {
-      p = JSON.parse(e.postData.contents);
-    } else if (e && e.parameter) {
-      p = e.parameter;
+    // 1. Acquire Concurrency Lock
+    if (!lock.waitLock(CONFIG.LOCK_TIMEOUT_MS)) {
+      return createJsonResponse(
+        "error",
+        "Server busy. Please try again in a moment.",
+      );
     }
 
-    var SPREADSHEET_ID = "1_8OVN1eZSVctG2IL3y5hhEQfPiBtr3Kw5vLI9nqWUiI";
-    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getActiveSheet();
+    const payload = parsePayload(e);
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = getOrCreateSheet(spreadsheet, CONFIG.SHEET_NAME);
 
-    // 1. Setup Header Row dynamically if sheet is empty
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Timestamp",
-        "Nama",
-        "1.1 Lokasi Sistem",
-        "1.2 Ketersediaan HW",
-        "1.2 Catatan",
-        "2.1 Akses Admin",
-        "2.2 Konfigurasi",
-        "3.1 Penanggung traffic@",
-        "3.2 Volume Email",
-        "File Note",
-        "Folder Link",
-      ]);
-      sheet.getRange(1, 1, 1, 11).setFontWeight("bold");
-    }
+    // Ensure headers exist dynamically
+    ensureHeaders(sheet, HEADERS);
 
-    var respondentName = p.respondentName || "Anonymous";
+    // 2. Prepare Data and Write to Sheet Safely (Critical Section)
+    const respondentName = sanitizeInput(
+      payload.respondentName || CONFIG.DEFAULT_RESPONDENT,
+    );
+    const timestampStr = payload.timestamp || new Date().toISOString();
 
-    // 2. Drive Folder Handling
-    var PARENT_FOLDER_ID = "1Lwbvmf_dkms7FAhqZaXUReSBULkhRbcG";
-    var parentFolder;
+    // Create Folder & Process Files (Isolated inside try-catch to manage locks cleanly)
+    let folderUrl = "";
+    let fileNotes = "No files uploaded";
 
     try {
-      if (
-        PARENT_FOLDER_ID &&
-        PARENT_FOLDER_ID !== "YOUR_ACTUAL_FOLDER_ID_STRING"
-      ) {
-        parentFolder = DriveApp.getFolderById(PARENT_FOLDER_ID);
-      } else {
-        parentFolder = DriveApp.getRootFolder();
-      }
-    } catch (folderErr) {
-      parentFolder = DriveApp.getRootFolder();
+      const folderData = createRespondentFolder(respondentName);
+      folderUrl = folderData.url;
+      fileNotes = processFileUploads(payload, folderData.folder);
+    } catch (fileErr) {
+      fileNotes = "File processing failed: " + fileErr.message;
     }
 
-    var timestampString = new Date().toLocaleDateString();
-    var newFolder = parentFolder.createFolder(
-      "Survey - " + respondentName + " (" + timestampString + ")",
-    );
-    var folderUrl = newFolder.getUrl();
-
-    // 3. Process base64 files
-    var fileNotes = [];
-    var fileFields = [
-      "file_1_1",
-      "file_1_2",
-      "file_2_1",
-      "file_2_2",
-      "file_3_1",
-      "file_3_2",
-    ];
-
-    fileFields.forEach(function (fieldId) {
-      if (p[fieldId] && p[fieldId + "_name"]) {
-        try {
-          var fileData = Utilities.base64Decode(p[fieldId]);
-          var blob = Utilities.newBlob(
-            fileData,
-            p[fieldId + "_type"] || "application/octet-stream",
-            p[fieldId + "_name"],
-          );
-          newFolder.createFile(blob);
-          fileNotes.push(p[fieldId + "_name"]);
-        } catch (fileErr) {
-          fileNotes.push(fieldId + " failed: " + fileErr.toString());
-        }
-      }
-    });
-
-    var finalFileNote =
-      fileNotes.length > 0 ? fileNotes.join(", ") : "No files uploaded";
-
-    // 4. Save entry to Sheet (bypassing Google Sheet Table blank-row skipping)
-    var rowData = [
-      p.timestamp || new Date().toISOString(),
+    const rowData = buildRowData(
+      payload,
+      timestampStr,
       respondentName,
-      p.q1_1 || "",
-      p.q1_2 || "",
-      p.q1_2_note || "",
-      p.q2_1 || "",
-      p.q2_2 || "",
-      p.q3_1 || "",
-      p.q3_2 || "",
-      finalFileNote,
+      fileNotes,
       folderUrl,
-    ];
+    );
 
-    var colA = sheet.getRange("A:A").getValues();
-    var lastRow = 0;
-    for (var i = 0; i < colA.length; i++) {
-      if (colA[i][0] !== "") {
-        lastRow = i + 1;
+    // Write row to sheet
+    sheet.appendRow(rowData);
+  } catch (err) {
+    return createJsonResponse("error", err.toString());
+  } finally {
+    // 3. Release Lock Immediately After Critical Section
+    lock.releaseLock();
+  }
+
+  return createJsonResponse("success", "Data saved successfully", {
+    folderUrl: folderUrl,
+  });
+}
+
+// ==========================================
+// HELPER & UTILITY MODULES
+// ==========================================
+
+function parsePayload(e) {
+  if (e && e.postData && e.postData.contents) {
+    return JSON.parse(e.postData.contents);
+  } else if (e && e.parameter) {
+    return e.parameter;
+  }
+  return {};
+}
+
+function sanitizeInput(value) {
+  if (typeof value !== "string") return value || "";
+  const trimmed = value.trim();
+  // Prevent Formula Injection in Google Sheets
+  if (/^[=+=\-@]/.test(trimmed)) {
+    return "'" + trimmed;
+  }
+  return trimmed;
+}
+
+function getOrCreateSheet(spreadsheet, sheetName) {
+  let sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+  }
+  return sheet;
+}
+
+function ensureHeaders(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  }
+}
+
+function createRespondentFolder(respondentName) {
+  let parentFolder;
+  try {
+    parentFolder = DriveApp.getFolderById(CONFIG.PARENT_FOLDER_ID);
+  } catch (err) {
+    parentFolder = DriveApp.getRootFolder();
+  }
+
+  const dateStr = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm",
+  );
+  const folder = parentFolder.createFolder(
+    `Survey - ${respondentName} (${dateStr})`,
+  );
+  return { folder: folder, url: folder.getUrl() };
+}
+
+function processFileUploads(payload, targetFolder) {
+  const notes = [];
+
+  FILE_FIELDS.forEach((fieldId) => {
+    const fileData = payload[fieldId];
+    const fileName = payload[`${fieldId}_name`];
+    const mimeType = payload[`${fieldId}_type`] || CONFIG.DEFAULT_MIME_TYPE;
+
+    if (fileData && fileName) {
+      try {
+        const blob = Utilities.newBlob(
+          Utilities.base64Decode(fileData),
+          mimeType,
+          fileName,
+        );
+        targetFolder.createFile(blob);
+        notes.push(fileName);
+      } catch (err) {
+        notes.push(`${fieldId} failed: ${err.message}`);
       }
     }
+  });
 
-    sheet.getRange(lastRow + 1, 1, 1, rowData.length).setValues([rowData]);
+  return notes.length > 0 ? notes.join(", ") : "No files uploaded";
+}
 
-    return ContentService.createTextOutput(
-      JSON.stringify({ status: "success", folderUrl: folderUrl }),
-    ).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(
-      JSON.stringify({ status: "error", message: err.toString() }),
-    ).setMimeType(ContentService.MimeType.JSON);
-  }
+function buildRowData(p, timestamp, respondentName, fileNote, folderUrl) {
+  return [
+    timestamp,
+    respondentName,
+    sanitizeInput(p.q1_1),
+    sanitizeInput(p.q1_2),
+    sanitizeInput(p.q1_2_note),
+    sanitizeInput(p.q2_1),
+    sanitizeInput(p.q2_2),
+    sanitizeInput(p.q3_1),
+    sanitizeInput(p.q3_2),
+    fileNote,
+    folderUrl,
+  ];
+}
+
+function createJsonResponse(status, message, extraData = {}) {
+  const responseObj = Object.assign(
+    { status: status, message: message },
+    extraData,
+  );
+  return ContentService.createTextOutput(
+    JSON.stringify(responseObj),
+  ).setMimeType(ContentService.MimeType.JSON);
 }

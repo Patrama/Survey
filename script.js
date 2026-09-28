@@ -3,13 +3,10 @@
  * @format
  */
 
-// ==========================================
-// CONFIGURATION & CONSTANTS
-// ==========================================
 const CONFIG = {
   SCRIPT_URL:
     "https://script.google.com/macros/s/AKfycbwC-fV_uUUAXZ0gL7DWpw4alg8zBPzFKtwVmJOWae2rcXrRTEBSeXbATAGuRvUBxCT86g/exec",
-  MAX_FILE_BYTES: 3 * 1024 * 1024, // 3 MB
+  MAX_FILE_BYTES: 3 * 1024 * 1024,
   OTHER_FIELDS: ["q1_2", "q2_1", "q3_2"],
   REQUIRED_TEXT_FIELDS: ["respondentName", "q1_1", "q2_2", "q3_1"],
   FILE_FIELDS: [
@@ -22,19 +19,12 @@ const CONFIG = {
   ],
 };
 
-// ==========================================
-// INITIALIZATION
-// ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("surveyForm");
-
   initDynamicOtherFields(form, CONFIG.OTHER_FIELDS);
   initFormSubmit(form);
 });
 
-// ==========================================
-// DYNAMIC UI HANDLERS (DRY)
-// ==========================================
 function initDynamicOtherFields(form, fields) {
   fields.forEach((fieldName) => {
     const radios = form.querySelectorAll(`input[name="${fieldName}"]`);
@@ -44,7 +34,6 @@ function initDynamicOtherFields(form, fields) {
     radios.forEach((radio) => {
       radio.addEventListener("change", () => {
         const isOther = radio.value === "__other__" && radio.checked;
-
         if (otherWrap) otherWrap.classList.toggle("hidden", !isOther);
         if (otherInput) {
           if (isOther) {
@@ -60,9 +49,6 @@ function initDynamicOtherFields(form, fields) {
   });
 }
 
-// ==========================================
-// SUBMISSION FLOW CONTROLLER
-// ==========================================
 function initFormSubmit(form) {
   const statusEl = document.getElementById("formStatus");
   const submitBtn = document.getElementById("submitBtn");
@@ -72,7 +58,6 @@ function initFormSubmit(form) {
     clearErrors();
     updateStatus(statusEl, "");
 
-    // 1. Client Validation
     if (!validateForm(form)) {
       updateStatus(
         statusEl,
@@ -91,15 +76,12 @@ function initFormSubmit(form) {
       return;
     }
 
-    // 2. Lock UI
     setLoadingState(submitBtn, true);
 
     try {
-      // 3. Process Payload
       updateStatus(statusEl, "Memproses data dan lampiran...", "info");
       const payload = await buildFormPayload(form);
 
-      // 4. Send Request
       updateStatus(statusEl, "Mengirim jawaban ke server...", "info");
       const resData = await sendPayload(CONFIG.SCRIPT_URL, payload);
 
@@ -107,7 +89,6 @@ function initFormSubmit(form) {
         throw new Error(resData.message || "Gagal menyimpan data.");
       }
 
-      // 5. Success State
       const successMsg = `Jawaban berhasil disimpan! <a href="${resData.folderUrl}" target="_blank" style="color: inherit; text-decoration: underline;">Buka Folder Google Drive</a>`;
       updateStatus(statusEl, successMsg, "success");
       form.reset();
@@ -125,9 +106,6 @@ function initFormSubmit(form) {
   });
 }
 
-// ==========================================
-// PAYLOAD & FILE MODULES
-// ==========================================
 async function buildFormPayload(form) {
   const data = {
     timestamp: new Date().toISOString(),
@@ -141,7 +119,6 @@ async function buildFormPayload(form) {
     q3_2: getRadioValue(form, "q3_2"),
   };
 
-  // Convert Files to Base64 in Parallel
   await Promise.all(
     CONFIG.FILE_FIELDS.map(async (fieldId) => {
       const input = document.getElementById(fieldId);
@@ -177,12 +154,8 @@ async function sendPayload(url, payload) {
   return await response.json();
 }
 
-// ==========================================
-// VALIDATION & UI UTILITIES
-// ==========================================
 function validateForm(form) {
   let valid = true;
-
   CONFIG.REQUIRED_TEXT_FIELDS.forEach((id) => {
     const el = document.getElementById(id);
     if (!el || !(el.value || "").trim()) {
@@ -236,7 +209,6 @@ function getRadioValue(form, name) {
 function showError(nameOrId, message) {
   const msgEl = document.querySelector(`.error-msg[data-for="${nameOrId}"]`);
   if (msgEl) msgEl.textContent = message;
-
   const field =
     document.getElementById(nameOrId)?.closest(".field") ||
     document.querySelector(`input[name="${nameOrId}"]`)?.closest(".field");
