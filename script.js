@@ -1,34 +1,161 @@
 /**
- * Survey Form — Frosted Glass
- * Submits text + base64 files to Google Apps Script → Sheet + Drive folder
- *
- * SETUP:
- * 1. Create a Google Sheet, open Extensions → Apps Script.
- * 2. Paste the full doPost from apps.script.js (the version that creates subfolders).
- * 3. Deploy → New deployment → Web app:
- *    - Execute as: Me
- *    - Who has access: Anyone
- * 4. Paste the Web App URL below.
- * 5. In the Apps Script, set PARENT_FOLDER_ID to your Drive folder ID.
- *
- * IMPORTANT LIMITS:
- * - Google Apps Script POST body practical limit ~5–10 MB after URL-encoding.
- * - Keep each file under ~3 MB. Prefer screenshots / compressed PDFs.
+ * Survey Form Controller — Modular & DRY
+ * @format
  */
 
-const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwC-fV_uUUAXZ0gL7DWpw4alg8zBPzFKtwVmJOWae2rcXrRTEBSeXbATAGuRvUBxCT86g/exec";
+// ==========================================
+// CONFIGURATION & CONSTANTS
+// ==========================================
+const CONFIG = {
+  SCRIPT_URL:
+    "https://script.google.com/macros/s/AKfycbwC-fV_uUUAXZ0gL7DWpw4alg8zBPzFKtwVmJOWae2rcXrRTEBSeXbATAGuRvUBxCT86g/exec",
+  MAX_FILE_BYTES: 3 * 1024 * 1024, // 3 MB
+  OTHER_FIELDS: ["q1_2", "q2_1", "q3_2"],
+  REQUIRED_TEXT_FIELDS: ["respondentName", "q1_1", "q2_2", "q3_1"],
+  FILE_FIELDS: [
+    "file_1_1",
+    "file_1_2",
+    "file_2_1",
+    "file_2_2",
+    "file_3_1",
+    "file_3_2",
+  ],
+};
 
-const OTHER_FIELDS = ["q1_2", "q2_1", "q3_2"];
-const FILE_FIELDS = [
-  "file_1_1",
-  "file_1_2",
-  "file_2_1",
-  "file_2_2",
-  "file_3_1",
-  "file_3_2",
-];
-const MAX_FILE_BYTES = 3 * 1024 * 1024; // 3 MB soft limit per file
+// ==========================================
+// INITIALIZATION
+// ==========================================
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("surveyForm");
+
+  initDynamicOtherFields(form, CONFIG.OTHER_FIELDS);
+  initFormSubmit(form);
+});
+
+// ==========================================
+// DYNAMIC UI HANDLERS (DRY)
+// ==========================================
+function initDynamicOtherFields(form, fields) {
+  fields.forEach((fieldName) => {
+    const radios = form.querySelectorAll(`input[name="${fieldName}"]`);
+    const otherWrap = document.getElementById(`other_${fieldName}`);
+    const otherInput = otherWrap?.querySelector("input");
+
+    radios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const isOther = radio.value === "__other__" && radio.checked;
+
+        if (otherWrap) otherWrap.classList.toggle("hidden", !isOther);
+        if (otherInput) {
+          if (isOther) {
+            otherInput.setAttribute("required", "required");
+            otherInput.focus();
+          } else {
+            otherInput.removeAttribute("required");
+            otherInput.value = "";
+          }
+        }
+      });
+    });
+  });
+}
+
+// ==========================================
+// SUBMISSION FLOW CONTROLLER
+// ==========================================
+function initFormSubmit(form) {
+  const statusEl = document.getElementById("formStatus");
+  const submitBtn = document.getElementById("submitBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearErrors();
+    updateStatus(statusEl, "");
+
+    // 1. Client Validation
+    if (!validateForm(form)) {
+      updateStatus(
+        statusEl,
+        "Mohon lengkapi semua field yang wajib diisi.",
+        "error",
+      );
+      return;
+    }
+
+    const sizeError = validateFileSizes(
+      CONFIG.FILE_FIELDS,
+      CONFIG.MAX_FILE_BYTES,
+    );
+    if (sizeError) {
+      updateStatus(statusEl, sizeError, "error");
+      return;
+    }
+
+    // 2. Lock UI
+    setLoadingState(submitBtn, true);
+
+    try {
+      // 3. Process Payload
+      updateStatus(statusEl, "Memproses data dan lampiran...", "info");
+      const payload = await buildFormPayload(form);
+
+      // 4. Send Request
+      updateStatus(statusEl, "Mengirim jawaban ke server...", "info");
+      const resData = await sendPayload(CONFIG.SCRIPT_URL, payload);
+
+      if (resData.status === "error") {
+        throw new Error(resData.message || "Gagal menyimpan data.");
+      }
+
+      // 5. Success State
+      const successMsg = `Jawaban berhasil disimpan! <a href="${resData.folderUrl}" target="_blank" style="color: inherit; text-decoration: underline;">Buka Folder Google Drive</a>`;
+      updateStatus(statusEl, successMsg, "success");
+      form.reset();
+      resetOtherFields(CONFIG.OTHER_FIELDS);
+    } catch (err) {
+      console.error(err);
+      updateStatus(
+        statusEl,
+        `Gagal mengirim: ${err.message || "Network error"}. Coba lagi.`,
+        "error",
+      );
+    } finally {
+      setLoadingState(submitBtn, false);
+    }
+  });
+}
+
+// ==========================================
+// PAYLOAD & FILE MODULES
+// ==========================================
+async function buildFormPayload(form) {
+  const data = {
+    timestamp: new Date().toISOString(),
+    respondentName: form.respondentName.value.trim(),
+    q1_1: form.q1_1.value.trim(),
+    q1_2: getRadioValue(form, "q1_2"),
+    q1_2_note: form.q1_2_note.value.trim(),
+    q2_1: getRadioValue(form, "q2_1"),
+    q2_2: form.q2_2.value.trim(),
+    q3_1: form.q3_1.value.trim(),
+    q3_2: getRadioValue(form, "q3_2"),
+  };
+
+  // Convert Files to Base64 in Parallel
+  await Promise.all(
+    CONFIG.FILE_FIELDS.map(async (fieldId) => {
+      const input = document.getElementById(fieldId);
+      if (input && input.files && input.files[0]) {
+        const file = input.files[0];
+        data[fieldId] = await toBase64(file);
+        data[`${fieldId}_name`] = file.name;
+        data[`${fieldId}_type`] = file.type || "application/octet-stream";
+      }
+    }),
+  );
+
+  return data;
+}
 
 const toBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -36,158 +163,35 @@ const toBase64 = (file) =>
     reader.readAsDataURL(file);
     reader.onload = () => {
       const result = reader.result;
-      const base64 = typeof result === "string" ? result.split(",")[1] : "";
-      resolve(base64 || "");
+      resolve(typeof result === "string" ? result.split(",")[1] : "");
     };
     reader.onerror = (error) => reject(error);
   });
 
-document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("surveyForm");
-  const statusEl = document.getElementById("formStatus");
-  const submitBtn = document.getElementById("submitBtn");
-
-  // Show/hide "Tulis Jawaban Anda" text inputs
-  OTHER_FIELDS.forEach((name) => {
-    const radios = form.querySelectorAll(`input[name="${name}"]`);
-    const otherWrap = document.getElementById(`other_${name}`);
-    const otherInput = otherWrap?.querySelector("input");
-
-    radios.forEach((radio) => {
-      radio.addEventListener("change", () => {
-        if (radio.value === "__other__" && radio.checked) {
-          otherWrap.classList.remove("hidden");
-          otherInput?.setAttribute("required", "required");
-          otherInput?.focus();
-        } else if (radio.checked) {
-          otherWrap.classList.add("hidden");
-          otherInput?.removeAttribute("required");
-          if (otherInput) otherInput.value = "";
-        }
-      });
-    });
+async function sendPayload(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
   });
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    clearErrors();
-    statusEl.textContent = "";
-    statusEl.className = "form-status";
-
-    if (!validateForm()) {
-      statusEl.textContent = "Mohon lengkapi semua field yang wajib diisi.";
-      statusEl.classList.add("error");
-      return;
-    }
-
-    // Soft size check before encoding
-    const sizeError = checkFileSizes();
-    if (sizeError) {
-      statusEl.textContent = sizeError;
-      statusEl.classList.add("error");
-      return;
-    }
-
-    submitBtn.disabled = true;
-    document.querySelector(".btn-text").classList.add("hidden");
-    document.querySelector(".btn-loading").classList.remove("hidden");
-
-    try {
-      const data = {
-        timestamp: new Date().toISOString(),
-        respondentName: form.respondentName.value.trim(),
-        q1_1: form.q1_1.value.trim(),
-        q1_2: getRadioValue("q1_2"),
-        q1_2_note: form.q1_2_note.value.trim(),
-        q2_1: getRadioValue("q2_1"),
-        q2_2: form.q2_2.value.trim(),
-        q3_1: form.q3_1.value.trim(),
-        q3_2: getRadioValue("q3_2"),
-      };
-
-      // Encode files to base64 (unique IDs now match the HTML)
-      for (const id of FILE_FIELDS) {
-        const input = document.getElementById(id);
-        if (input && input.files && input.files[0]) {
-          const file = input.files[0];
-          data[id] = await toBase64(file);
-          data[`${id}_name`] = file.name;
-          data[`${id}_type`] = file.type || "application/octet-stream";
-        }
-      }
-
-      if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.trim() === "") {
-        downloadAsJson(data);
-        statusEl.textContent =
-          "URL Google Apps Script belum dikonfigurasi. Jawaban diunduh sebagai JSON.";
-        statusEl.classList.add("success");
-        return;
-      }
-
-      const formBody = new URLSearchParams();
-      Object.entries(data).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) formBody.append(k, String(v));
-      });
-
-      // no-cors is required for many Apps Script deployments; response is opaque.
-      // We still treat network success as "sent". Check the Sheet + Drive folder to confirm.
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formBody.toString(),
-      });
-
-      statusEl.innerHTML =
-        "Permintaan terkirim. Periksa Google Sheet dan folder Drive " +
-        "(nama folder: <strong>Survey – [Nama]</strong>). " +
-        "Jika baris tidak muncul, file mungkin terlalu besar atau script belum di-deploy ulang.";
-      statusEl.classList.add("success");
-      form.reset();
-      OTHER_FIELDS.forEach((name) => {
-        document.getElementById(`other_${name}`)?.classList.add("hidden");
-      });
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent =
-        "Gagal mengirim (network/error). Coba lagi atau kurangi ukuran file.";
-      statusEl.classList.add("error");
-    } finally {
-      submitBtn.disabled = false;
-      document.querySelector(".btn-text").classList.remove("hidden");
-      document.querySelector(".btn-loading").classList.add("hidden");
-    }
-  });
-});
-
-function checkFileSizes() {
-  for (const id of FILE_FIELDS) {
-    const input = document.getElementById(id);
-    if (input && input.files && input.files[0]) {
-      const file = input.files[0];
-      if (file.size > MAX_FILE_BYTES) {
-        return `File "${file.name}" terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal disarankan 3 MB.`;
-      }
-    }
-  }
-  return null;
+  return await response.json();
 }
 
-function validateForm() {
+// ==========================================
+// VALIDATION & UI UTILITIES
+// ==========================================
+function validateForm(form) {
   let valid = true;
-  const form = document.getElementById("surveyForm");
 
-  const requiredText = ["respondentName", "q1_1", "q2_2", "q3_1"];
-  requiredText.forEach((id) => {
+  CONFIG.REQUIRED_TEXT_FIELDS.forEach((id) => {
     const el = document.getElementById(id);
-    const val = (el.value || "").trim();
-    if (!val) {
+    if (!el || !(el.value || "").trim()) {
       showError(id, "Field ini wajib diisi.");
       valid = false;
     }
   });
 
-  OTHER_FIELDS.forEach((name) => {
+  CONFIG.OTHER_FIELDS.forEach((name) => {
     const selected = form.querySelector(`input[name="${name}"]:checked`);
     if (!selected) {
       showError(name, "Pilih salah satu opsi.");
@@ -206,9 +210,33 @@ function validateForm() {
   return valid;
 }
 
+function validateFileSizes(fields, maxBytes) {
+  for (const id of fields) {
+    const input = document.getElementById(id);
+    if (input && input.files && input.files[0]) {
+      const file = input.files[0];
+      if (file.size > maxBytes) {
+        return `File "${file.name}" terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 3 MB.`;
+      }
+    }
+  }
+  return null;
+}
+
+function getRadioValue(form, name) {
+  const selected = form.querySelector(`input[name="${name}"]:checked`);
+  if (!selected) return "";
+  if (selected.value === "__other__") {
+    const other = form.querySelector(`input[name="${name}_other"]`);
+    return (other?.value || "").trim() || "";
+  }
+  return selected.value;
+}
+
 function showError(nameOrId, message) {
   const msgEl = document.querySelector(`.error-msg[data-for="${nameOrId}"]`);
   if (msgEl) msgEl.textContent = message;
+
   const field =
     document.getElementById(nameOrId)?.closest(".field") ||
     document.querySelector(`input[name="${nameOrId}"]`)?.closest(".field");
@@ -216,34 +244,27 @@ function showError(nameOrId, message) {
 }
 
 function clearErrors() {
-  document.querySelectorAll(".error-msg").forEach((el) => (el.textContent = ""));
-  document.querySelectorAll(".field.has-error").forEach((el) => el.classList.remove("has-error"));
+  document
+    .querySelectorAll(".error-msg")
+    .forEach((el) => (el.textContent = ""));
+  document
+    .querySelectorAll(".field.has-error")
+    .forEach((el) => el.classList.remove("has-error"));
 }
 
-function getRadioValue(name) {
-  const form = document.getElementById("surveyForm");
-  const selected = form.querySelector(`input[name="${name}"]:checked`);
-  if (!selected) return "";
-  if (selected.value === "__other__") {
-    const other = form.querySelector(`input[name="${name}_other"]`);
-    return (other?.value || "").trim() || "(jawaban kustom kosong)";
-  }
-  return selected.value;
-}
-
-function downloadAsJson(data) {
-  // Strip huge base64 before download for readability
-  const safe = { ...data };
-  FILE_FIELDS.forEach((id) => {
-    if (safe[id]) safe[id] = `[base64 ${safe[id].length} chars]`;
+function resetOtherFields(fields) {
+  fields.forEach((name) => {
+    document.getElementById(`other_${name}`)?.classList.add("hidden");
   });
-  const blob = new Blob([JSON.stringify(safe, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `survei-email-${data.respondentName || "anonim"}-${Date.now()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+}
+
+function setLoadingState(buttonEl, isLoading) {
+  buttonEl.disabled = isLoading;
+  document.querySelector(".btn-text").classList.toggle("hidden", isLoading);
+  document.querySelector(".btn-loading").classList.toggle("hidden", !isLoading);
+}
+
+function updateStatus(el, message, type = "info") {
+  el.innerHTML = message;
+  el.className = `form-status ${type}`;
 }
